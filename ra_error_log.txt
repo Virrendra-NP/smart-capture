@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "D:\JKD_Folder\JKD-PROJECT SITE\DPR\Excel_DPR\ra_variation_app.py", line 47, in create_variation_statement
+    center_align = Alignment(horizontal='center', vertical='center', text_wrap=True)
+TypeError: Alignment.__init__() got an unexpected keyword argument 'text_wrap'

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Progress Report Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #1F4E79;        /* Deep Blue for Headers */
+            --secondary: #4472C4;      /* Lighter Blue */
+            --bg-color: #f8fafc;       /* Light grayish-blue background */
+            --card-bg: #ffffff;
+            --text-main: #334155;      /* Slate 700 */
+            --text-muted: #64748b;     /* Slate 500 */
+            
+            /* Chart colors based on your excel script */
+            --planned-color: rgba(91, 155, 213, 0.85); /* #5B9BD5 */
+            --achieved-color: rgba(112, 173, 71, 0.85); /* #70AD47 */
+            --variance-color: rgba(192, 0, 0, 0.85);  /* #C00000 */
+            
+            --success: #10b981;
+            --danger: #ef4444;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --border-radius: 12px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        header p {
+            margin: 0;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1.5rem 0;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 24px;
+            background-color: var(--secondary);
+            border-radius: 4px;
+        }
+
+        /* KPI Cards Layout */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border-top: 4px solid var(--primary);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .kpi-card.overall-card {
+            border-top: 4px solid var(--success);
+        }
+
+        .kpi-title {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .kpi-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.25rem;
+        }
+
+        .kpi-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .kpi-percentage {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .pct-high { background: #dcfce7; color: #166534; }
+        .pct-med { background: #fef9c3; color: #854d0e; }
+        .pct-low { background: #fee2e2; color: #991b1b; }
+
+        /* Charts Layout */
+        .charts-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .chart-card h3 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 0.75rem;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+
+        @media (max-width: 1024px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>JKD 358 - PRODUCTION BLOCK</h1>
+        <p>Monthly Progress Report Dashboard &bull; February 2026</p>
+    </header>
+
+    <!-- OVERALL SUMMARY -->
+    <div class="kpi-grid">
+        <div class="kpi-card overall-card">
+            <div class="kpi-title">Overall Planned</div>
+            <div class="kpi-value">1,245.5</div>
+            <div class="kpi-subtitle">Total Units Planned</div>
+        </div>
+        <div class="kpi-card overall-card">
+            <div class="kpi-title">Overall Achieved</div>
+            <div class="kpi-value">1,080.2</div>
+            <div class="kpi-subtitle">Total Units Achieved</div>
+        </div>
+        <div class="kpi-card overall-card" style="border-top-color: var(--secondary);">
+            <div class="kpi-title">Overall Achievement %</div>
+            <div class="kpi-value text-primary">86.7%</div>
+            <div class="kpi-subtitle">
+                <span class="kpi-percentage pct-high">Excellent Progress</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN FACTORY BUILDING SECTION -->
+    <h2 class="section-title">Main Factory Building progress</h2>
+    
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-title">Planned Quantity</div>
+            <div class="kpi-value">850.0</div>
+            <div class="kpi-subtitle">Units</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Achieved Quantity</div>
+            <div class="kpi-value">710.5</div>
+            <div class="kpi-subtitle">Units</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Achievement %</div>
+            <div class="kpi-value">83.6%</div>
+            <div class="kpi-subtitle">
+                <span class="kpi-percentage pct-med">Needs attention in some areas</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="charts-container">
+        <!-- Main Building Bar Chart -->
+        <div class="chart-card">
+            <h3>Planned vs. Achieved by Activity</h3>
+            <div class="chart-wrapper">
+                <canvas id="mbBarChart"></canvas>
+            </div>
+        </div>
+        <!-- Main Building Achievement % Chart -->
+        <div class="chart-card">
+            <h3>Achievement % Breakdown</h3>
+            <div class="chart-wrapper">
+                <canvas id="mbDoughnutChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMPOUND WALL SECTION -->
+    <h2 class="section-title">Compound Wall Progress</h2>
+    
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-title">Planned Quantity</div>
+            <div class="kpi-value">395.5</div>
+            <div class="kpi-subtitle">Units</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Achieved Quantity</div>
+            <div class="kpi-value">369.7</div>
+            <div class="kpi-subtitle">Units</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-title">Achievement %</div>
+            <div class="kpi-value">93.5%</div>
+            <div class="kpi-subtitle">
+                <span class="kpi-percentage pct-high">On Schedule</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="charts-container">
+        <!-- Compound Wall Bar Chart -->
+        <div class="chart-card">
+            <h3>Planned vs. Achieved by Activity</h3>
+            <div class="chart-wrapper">
+                <canvas id="cwBarChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Common Chart Configuration
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.color = '#64748b';
+    
+    const barOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: { usePointStyle: true, boxWidth: 8 }
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                titleColor: '#1e293b',
+                bodyColor: '#475569',
+                borderColor: '#e2e8f0',
+                borderWidth: 1,
+                padding: 12,
+                boxPadding: 6,
+                usePointStyle: true
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: { color: '#f1f5f9', drawBorder: false },
+                title: { display: true, text: 'Quantity' }
+            },
+            x: {
+                grid: { display: false, drawBorder: false }
+            }
+        }
+    };
+
+    // --- MAIN BUILDING BAR CHART ---
+    const mbCtx = document.getElementById('mbBarChart').getContext('2d');
+    new Chart(mbCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Excavation', 'PCC', 'RCC Footing', 'Plinth Beam', 'Column Work', 'Slab Shuttering', 'Brickwork'],
+            datasets: [
+                {
+                    label: 'Planned',
+                    data: [150, 80, 200, 120, 100, 100, 100],
+                    backgroundColor: 'rgba(91, 155, 213, 0.85)',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Achieved',
+                    data: [150, 75, 180, 100, 85, 90, 30.5],
+                    backgroundColor: 'rgba(112, 173, 71, 0.85)',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: barOptions
+    });
+
+    // --- MAIN BUILDING DOUGHNUT CHART ---
+    const mbDoughnutCtx = document.getElementById('mbDoughnutChart').getContext('2d');
+    new Chart(mbDoughnutCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Achieved', 'Remaining to Target'],
+            datasets: [{
+                data: [83.6, 16.4],
+                backgroundColor: [
+                    'rgba(112, 173, 71, 0.85)',
+                    'rgba(226, 232, 240, 1)'
+                ],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.raw + '%';
+                        }
+                    }
+                }
+            }
+        },
+        plugins: [{
+            id: 'textCenter',
+            beforeDraw: function(chart) {
+                var width = chart.width, height = chart.height, ctx = chart.ctx;
+                ctx.restore();
+                var fontSize = (height / 114).toFixed(2);
+                ctx.font = "bold " + fontSize + "em Inter";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#334155";
+                var text = "83.6%",
+                    textX = Math.round((width - ctx.measureText(text).width) / 2),
+                    textY = height / 2.2;
+                ctx.fillText(text, textX, textY);
+                ctx.save();
+            }
+        }]
+    });
+
+    // --- COMPOUND WALL BAR CHART ---
+    const cwCtx = document.getElementById('cwBarChart').getContext('2d');
+    new Chart(cwCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Earthwork', 'PCC', 'RR Masonry', 'Plinth Beam', 'Block Work', 'Plastering'],
+            datasets: [
+                {
+                    label: 'Planned',
+                    data: [50, 25.5, 120, 60, 80, 60],
+                    backgroundColor: 'rgba(91, 155, 213, 0.85)',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Achieved',
+                    data: [50, 25.5, 120, 50, 75, 49.2],
+                    backgroundColor: 'rgba(112, 173, 71, 0.85)',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: barOptions
+    });
+</script>
+
+</body>
+</html>

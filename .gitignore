@@ -1,0 +1,10 @@
+# EXCLUDE LOCAL LARGE FILES FROM GITHUB (FOR SECURITY & SPEED)
+.venv/
+__pycache__/
+Site_Photos_Portal/
+Smart_Capture_Vault/
+*.csv
+*.xlsx
+.vscode/
+.idea/
+cloudflared.exe
