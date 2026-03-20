@@ -172,7 +172,7 @@ tab_capture, tab_data, tab_excel = st.tabs(["📸 SMART CAPTURE", "📋 HISTORY"
 with tab_capture:
     # Get IST Time and GPS
     now_ist = get_ist_now()
-    loc_data = get_geolocation() if get_geolocation else None
+    loc_data = get_geolocation(component_key='site_gps_sensor') if get_geolocation else None
     
     if loc_data and 'coords' in loc_data:
         lat, lon = loc_data['coords']['latitude'], loc_data['coords']['longitude']
