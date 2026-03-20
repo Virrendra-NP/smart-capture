@@ -4,46 +4,80 @@ from datetime import datetime
 import os
 from PIL import Image, ExifTags, ImageOps, ImageDraw, ImageFont
 import io
+import io
+import json
 try:
     from streamlit_js_eval import get_geolocation
 except ImportError:
     get_geolocation = None
+
+# --- PREFERENCE ENGINE & PERSISTENCE ---
+PREF_FILE = "user_settings.json"
+
+def load_prefs():
+    if os.path.exists(PREF_FILE):
+        try:
+            with open(PREF_FILE, "r") as f: return json.load(f)
+        except: pass
+    return {"category": "Building Work", "loc": "Main Building", "dest": "Local Vault (Office PC)", "mode": "📸 LIVE SITE PHOTO"}
+
+def save_prefs(data):
+    try:
+        with open(PREF_FILE, "w") as f: json.dump(data, f)
+    except: pass
+
+prefs = load_prefs()
 
 # --- PAGE CONFIGURATION (Premium App Look) ---
 st.set_page_config(
     page_title="Smart Capture",
     page_icon="👷",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Custom Design for Site Use (High Contrast, Large Buttons)
+# Custom iOS Aesthetic Design (Glassmorphism & SF Pro)
 st.markdown("""
     <style>
-    /* Dark Slate Premium Background */
-    .stApp { background-color: #0f172a; color: #f1f5f9; font-family: 'Segoe UI', sans-serif; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     
-    /* Header Styling */
-    h1 { color: #3b82f6; text-align: center; border-bottom: 2px solid #334155; padding-bottom: 10px; }
+    /* Apple SF Pro Style Fonts */
+    html, body, [class*="css"] { 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important; 
+        background-color: #000000;
+    }
     
-    /* Big Submit Button */
+    .stApp { background-color: #000000; color: #f8fafc; }
+    
+    /* Sidebar as a Professional "Settings Drawer" */
+    section[data-testid="stSidebar"] {
+        background-color: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    /* Big iOS Style Buttons */
     .stButton>button { 
         width: 100%; 
-        height: 70px; 
+        height: 75px; 
         font-size: 20px; 
-        font-weight: bold; 
-        background-color: #3b82f6 !important; 
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        transition: transform 0.2s;
+        font-weight: 700; 
+        background-color: #007aff !important; 
+        border-radius: 14px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        border: none;
     }
-    .stButton>button:active { transform: scale(0.98); }
     
-    /* Camera Block */
-    .stCamera { border: 3px solid #3b82f6; border-radius: 15px; overflow: hidden; }
+    /* Input Style (iOS Settings Cell) */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stTextArea>div>textarea { 
+        background-color: #1c1c1e !important; 
+        color: #FFFFFF !important; 
+        border: 1px solid #38383a !important; 
+        border-radius: 12px !important;
+    }
     
-    /* Input Highlights */
-    .stTextInput>div>div>input, .stSelectbox>div>div>div { background-color: #1e293b !important; color: white !important; border: 1px solid #334155 !important; }
+    /* Logo / Header */
+    .header-text { font-size: 28px; font-weight: 800; color: #007aff; text-align: center; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -81,38 +115,65 @@ if get_geolocation:
 # --- APP TABS ---
 tab_capture, tab_data = st.tabs(["📸 NEW CAPTURE", "📋 GLOBAL HISTORY"])
 
-with tab_capture:
-    st.header("Step 1: Activity & Cloud Destination")
+# --- SIDEBAR: SETTINGS GEAR (⚙️) ---
+with st.sidebar:
+    st.markdown("<h2 style='color:#007aff'>⚙️ APP SETTINGS</h2>", unsafe_allow_html=True)
+    st.divider()
     
-    col1, col2 = st.columns(2)
-    with col1:
-        category = st.selectbox("Work Item Type:", ["Earth Work", "Shuttering / Formwork", "Building Work", "Reinforcement", "Other (Type Below)"])
-        if category == "Other (Type Below)":
-            custom_work = st.text_input("📝 Custom Work Item:")
-            category = custom_work if custom_work else "Custom Item"
-            
-    with col2:
-        dest = st.selectbox("☁️ SAVE TO CLOUD DRIVE:", list(CLOUD_PATHS.keys()))
-        target_dir = CLOUD_PATHS.get(dest, CLOUD_PATHS["Local Vault (Office PC)"])
-        if not os.path.exists(target_dir):
-            st.warning(f"⚠️ {dest} folder not found on PC. Saving to Local Vault instead.")
-            target_dir = CLOUD_PATHS["Local Vault (Office PC)"]
+    # 1. Capture Choice (Sticky)
+    modes = ["📸 LIVE SITE PHOTO", "📁 BACKUP FROM PHOTOS"]
+    m_idx = modes.index(prefs["mode"]) if prefs["mode"] in modes else 0
+    c_mode = st.radio("Default Camera Mode:", modes, index=m_idx)
     
-    col3, col4 = st.columns(2)
-    with col3:
-        loc = st.text_input("📍 Site Location / Block:", value="Main Building")
-    with col4:
-        remarks = st.text_area("📝 Remarks / Descriptions:", placeholder="Ex: Progress 40% complete.")
+    # 2. Work Item (Sticky)
+    cat_list = ["Earth Work", "Shuttering / Formwork", "Building Work", "Reinforcement", "Concrete Pouring", "Other (Type Below)"]
+    c_idx = cat_list.index(prefs["category"]) if prefs["category"] in cat_list else 5
+    category = st.selectbox("Current Work Item:", cat_list, index=c_idx)
+    if category == "Other (Type Below)":
+        category = st.text_input("📝 Custom Work Type:", value=prefs.get("custom_category", ""))
+    
+    # 3. Location (Sticky)
+    loc = st.text_input("📍 Default Location/Block:", value=prefs["loc"])
+    
+    # 4. Destination (Sticky)
+    d_list = list(CLOUD_PATHS.keys())
+    d_idx = d_list.index(prefs["dest"]) if prefs["dest"] in d_list else 0
+    dest = st.selectbox("☁️ CLOUD DESTINATION:", d_list, index=d_idx)
+    target_dir = CLOUD_PATHS.get(dest, CLOUD_PATHS["Local Vault (Office PC)"])
 
-    st.header("Step 2: Start Site Capture")
-    st.info("🎯 **IPAD/IPHONE TIP**: Tap the button below and select **'Take Photo'**. This opens the Real Apple Camera where you can switch between **Front and Rear** cameras normally!")
+    st.divider()
+    st.markdown("<p style='text-align: center; color: #3b82f6; font-size: 16px;'><b>Professional App Developer: Virrendra</b></p>", unsafe_allow_html=True)
+
+# --- AUTO-SAVE PREFERENCES (Native Style) ---
+save_prefs({
+    "category": category, 
+    "loc": loc, 
+    "dest": dest, 
+    "mode": c_mode, 
+    "custom_category": category if category not in cat_list else ""
+})
+
+# --- MAIN PAGE: CAMERA FIRST ---
+st.markdown("<div class='header-text'>BUILDING SMART CAPTURE</div>", unsafe_allow_html=True)
+
+tab_capture, tab_data = st.tabs(["📸 SMART CAPTURE", "📋 GLOBAL HISTORY"])
+
+with tab_capture:
+    # Mode Summary
+    st.write(f"📝 **Reporting**: {category} at {loc}")
+    st.write(f"📁 **Saving to**: {dest}")
+
+    st.caption(f"🎯 **IPAD TIP**: Mode is {c_mode}. Tap below to Snap Photo.")
     
-    # ONE BUTTON FOR ALL: Opens native camera or library
-    photo = st.file_uploader("📸 SNAP OR SELECT SITE PHOTO", type=['jpg', 'jpeg', 'png'])
+    # HERO CAMERA BUTTON
+    photo = st.file_uploader("📸 TAP TO CAPTURE SITE EVIDENCE", type=['jpg', 'jpeg', 'png'])
     
+    remarks = st.text_area("✍️ Site Remarks (Optional):", placeholder="Ex: Progress check on slab concrete.")
+
     if photo is not None and st.button("🚀 SUBMIT & SYNC TO CLOUD"):
+        # Processing Logic
         now = datetime.now()
-        ts = now.strftime('%Y%m%d_%H%M%S')
+        ts = now.strftime('%Y%c%d_%H%M%S')
         img_filename = f"{ts}_{category[:10].replace(' ','_')}.jpg"
         
         # Ensure target dir exists
@@ -123,52 +184,30 @@ with tab_capture:
         image = Image.open(photo)
         image = ImageOps.exif_transpose(image)
         
-        # --- SMART WATERMARK ENGINE ---
+        # Watermark...
         try:
             draw = ImageDraw.Draw(image)
             w, h = image.size
-            
-            # Formatted Data: "19-Mar-2026 (Thursday) 23:12 | GPS: 12.345, 67.890 | Virrendra"
             dt_str = now.strftime('%d-%b-%Y (%A) %H:%M')
             watermark_text = f"{dt_str} | GPS: {gps_str} | Developer: Virrendra"
-            
-            # Dynamic Font Size (approx 3% of image height)
             f_size = max(24, int(h * 0.03))
             try: font = ImageFont.truetype("arial.ttf", f_size)
             except: font = ImageFont.load_default()
-            
-            # Position: Bottom Right (with 2% padding)
             pad_x, pad_y = int(w * 0.02), int(h * 0.05)
-            
-            # Draw with high-contrast STROKE (so it works on white/black photos)
-            draw.text((w - pad_x, h - pad_y), watermark_text, 
-                      fill="white", font=font, anchor="rs", 
-                      stroke_width=max(1, f_size//20), stroke_fill="black")
-        except Exception as e:
-            st.error(f"Watermark Error: {e}")
+            draw.text((w - pad_x, h - pad_y), watermark_text, fill="white", font=font, anchor="rs", stroke_width=max(1, f_size//20), stroke_fill="black")
+        except: pass
 
-        # Save Final Processed Image
         image.save(img_path, quality=90, optimize=True)
         
-        # Record data
-        record = {
-            'Timestamp': now.strftime('%d-%m-%Y %H:%M'),
-            'Category': category,
-            'Location': loc,
-            'GPS': gps_str,
-            'Destination': dest,
-            'Remarks': remarks,
-            'Photo_Name': img_filename
-        }
-        
+        # Record data...
+        record = {'Timestamp': now.strftime('%d-%m-%Y %H:%M'), 'Category': category, 'Location': loc, 'GPS': gps_str, 'Destination': dest, 'Remarks': remarks, 'Photo_Name': img_filename}
         if os.path.exists(HISTORY_FILE):
             df = pd.read_csv(HISTORY_FILE)
             df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
         else:
             df = pd.DataFrame([record])
-        
         df.to_csv(HISTORY_FILE, index=False)
-        st.success(f"✅ RECORDED! Saved to: {dest} (Watermark Created!)")
+        st.success(f"✅ RECORDED SUCCESSFULLY! (Synced to Drive)")
         st.balloons()
 
 with tab_data:
