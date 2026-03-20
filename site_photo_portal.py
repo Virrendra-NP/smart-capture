@@ -226,6 +226,43 @@ with tab_data:
     if os.path.exists(HISTORY_FILE):
         df_view = pd.read_csv(HISTORY_FILE)
         st.dataframe(df_view.sort_index(ascending=False), use_container_width=True, hide_index=True)
+        
+        # --- ARCHIVE CONTROL (DELETE MODE) ---
+        st.divider()
+        st.subheader("🗑️ ARCHIVE CONTROL")
+        st.caption("🚨 WARNING: Deletion is permanent and also removes the photo from Cloud Storage.")
+        
+        to_delete = st.multiselect("Select Records to Permanently Delete:", df_view.index, 
+                                   format_func=lambda i: f"{df_view.iloc[i]['Timestamp']} - {df_view.iloc[i]['Category']}")
+        
+        confirm = st.checkbox("Confirm: Yes, I want to permanently delete these records.")
+        
+        if st.button("🚀 PURGE SELECTED RECORDS") and to_delete:
+            if not confirm:
+                st.error("Please check the 'Confirm' box first!")
+            else:
+                p_count = 0
+                f_count = 0
+                
+                rows_to_keep = [i for i in df_view.index if i not in to_delete]
+                
+                # Delete files from Cloud
+                for idx in to_delete:
+                    img_name = df_view.iloc[idx]['Photo_Name']
+                    for b_path in CLOUD_PATHS.values():
+                        p_file = os.path.join(b_path, img_name)
+                        if os.path.exists(p_file):
+                            try:
+                                os.remove(p_file)
+                                f_count += 1
+                            except: pass
+                    p_count += 1
+                
+                # Update CSV
+                df_new = df_view.iloc[rows_to_keep]
+                df_new.to_csv(HISTORY_FILE, index=False)
+                st.success(f"✅ PURGE COMPLETE: {p_count} Records removed, {f_count} Files deleted from Cloud.")
+                st.rerun()
     else:
         st.warning("No records found.")
 
