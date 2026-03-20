@@ -225,30 +225,50 @@ with tab_excel:
                 sheet = workbook.add_worksheet("Site Report")
                 
                 # Formats
-                lbl_fmt = workbook.add_format({'bold': True, 'bg_color': '#E2EFDA', 'border': 1})
-                val_fmt = workbook.add_format({'border': 1})
+                lbl_fmt = workbook.add_format({'bold': True, 'bg_color': '#E2EFDA', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
+                val_fmt = workbook.add_format({'border': 1, 'align': 'left', 'valign': 'vcenter'})
+                
+                # Setup Column Widths (189 pixels is approx 26 units)
+                sheet.set_column(0, 3, 15) # Standard
+                sheet.set_column(0, 0, 26) # Image Column
                 
                 row = 0
                 for idx in selected_rows:
                     data = df_ex.iloc[idx]
-                    # Row 1
+                    
+                    # Row 1: Header (Metadata Cells)
+                    sheet.set_row(row, 20)
                     sheet.write(row, 0, "ACTIVITY:", lbl_fmt); sheet.write(row, 1, data['Category'], val_fmt)
                     sheet.write(row, 2, "LOCATION:", lbl_fmt); sheet.write(row, 3, data['Location'], val_fmt)
-                    # Row 2
+                    
+                    # Row 2: Header (Time/GPS)
+                    sheet.set_row(row+1, 20)
                     sheet.write(row+1, 0, "TIMESTAMP:", lbl_fmt); sheet.write(row+1, 1, data['Timestamp'], val_fmt)
                     sheet.write(row+1, 2, "GPS INFO:", lbl_fmt); sheet.write(row+1, 3, data['GPS'], val_fmt)
                     
-                    # Row 3 (Image)
+                    # Row 3: Image (Height set to 142 points = 5cm)
+                    sheet.set_row(row+2, 142) 
+                    
                     img_name = data['Photo_Name']
                     found = False
                     for b_path in CLOUD_PATHS.values():
                         p_file = os.path.join(b_path, img_name)
                         if os.path.exists(p_file):
-                            sheet.insert_image(row+2, 0, p_file, {'x_scale': 0.15, 'y_scale': 0.15, 'x_offset': 5, 'y_offset': 5})
-                            found = True; break
+                            try:
+                                # Calculate scale for 5cm (approx 189 pixels)
+                                with Image.open(p_file) as img:
+                                    w_px, h_px = img.size
+                                    x_scale = 189.0 / w_px
+                                    y_scale = 189.0 / h_px
+                                sheet.insert_image(row+2, 0, p_file, {'x_scale': x_scale, 'y_scale': y_scale, 'x_offset': 5, 'y_offset': 5})
+                                found = True
+                            except: pass
+                            break
                     
                     if not found: sheet.write(row+2, 0, "Photo missing in storage")
-                    row += 25 # Space for image
+                    
+                    # NEXT RECORD: Skip 1 row (Photo Row is r+2, Empty Row is r+3, Next is r+4)
+                    row += 4 
                 
                 workbook.close()
                 output.seek(0)
