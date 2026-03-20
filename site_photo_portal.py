@@ -192,7 +192,7 @@ with tab_capture:
 
     if photo is not None and st.button("🚀 SUBMIT & SYNC TO CLOUD"):
         now_push = get_ist_now()
-        ts = now_push.strftime('%Y%c%d_%H%M%S')
+        ts = now_push.strftime('%Y%m%d_%H%M%S')
         img_filename = f"{ts}_{category[:10].replace(' ','_')}.jpg"
         os.makedirs(target_dir, exist_ok=True)
         img_path = os.path.join(target_dir, img_filename)
