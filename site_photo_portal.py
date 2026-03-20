@@ -6,6 +6,10 @@ from PIL import Image, ExifTags, ImageOps, ImageDraw, ImageFont
 import io
 import io
 import json
+import io
+import json
+import xlsxwriter
+from io import BytesIO
 try:
     from streamlit_js_eval import get_geolocation
 except ImportError:
@@ -156,35 +160,24 @@ save_prefs({
 # --- MAIN PAGE: CAMERA FIRST ---
 st.markdown("<div class='header-text'>BUILDING SMART CAPTURE</div>", unsafe_allow_html=True)
 
-tab_capture, tab_data = st.tabs(["📸 SMART CAPTURE", "📋 GLOBAL HISTORY"])
+tab_capture, tab_data, tab_excel = st.tabs(["📸 SMART CAPTURE", "📋 HISTORY", "📑 EXCEL GENERATOR"])
 
 with tab_capture:
-    # Mode Summary
     st.write(f"📝 **Reporting**: {category} at {loc}")
     st.write(f"📁 **Saving to**: {dest}")
-
     st.caption(f"🎯 **IPAD TIP**: Mode is {c_mode}. Tap below to Snap Photo.")
     
-    # HERO CAMERA BUTTON
     photo = st.file_uploader("📸 TAP TO CAPTURE SITE EVIDENCE", type=['jpg', 'jpeg', 'png'])
-    
     remarks = st.text_area("✍️ Site Remarks (Optional):", placeholder="Ex: Progress check on slab concrete.")
 
     if photo is not None and st.button("🚀 SUBMIT & SYNC TO CLOUD"):
-        # Processing Logic
         now = datetime.now()
         ts = now.strftime('%Y%c%d_%H%M%S')
         img_filename = f"{ts}_{category[:10].replace(' ','_')}.jpg"
-        
-        # Ensure target dir exists
         os.makedirs(target_dir, exist_ok=True)
         img_path = os.path.join(target_dir, img_filename)
-        
-        # Save photo WITH ROTATION FIX & WATERMARK
         image = Image.open(photo)
         image = ImageOps.exif_transpose(image)
-        
-        # Watermark...
         try:
             draw = ImageDraw.Draw(image)
             w, h = image.size
@@ -196,10 +189,7 @@ with tab_capture:
             pad_x, pad_y = int(w * 0.02), int(h * 0.05)
             draw.text((w - pad_x, h - pad_y), watermark_text, fill="white", font=font, anchor="rs", stroke_width=max(1, f_size//20), stroke_fill="black")
         except: pass
-
         image.save(img_path, quality=90, optimize=True)
-        
-        # Record data...
         record = {'Timestamp': now.strftime('%d-%m-%Y %H:%M'), 'Category': category, 'Location': loc, 'GPS': gps_str, 'Destination': dest, 'Remarks': remarks, 'Photo_Name': img_filename}
         if os.path.exists(HISTORY_FILE):
             df = pd.read_csv(HISTORY_FILE)
@@ -211,14 +201,61 @@ with tab_capture:
         st.balloons()
 
 with tab_data:
-    st.header("Global Site History")
+    st.header("📋 GLOBAL SITE LOG")
     if os.path.exists(HISTORY_FILE):
         df_view = pd.read_csv(HISTORY_FILE)
         st.dataframe(df_view.sort_index(ascending=False), use_container_width=True, hide_index=True)
-        st.download_button("⬇️ Download Master Log (CSV)", df_view.to_csv(index=False).encode('utf-8'), "Site_Log.csv", "text/csv")
     else:
-        st.warning("No data yet.")
+        st.warning("No records found.")
+
+with tab_excel:
+    st.header("🚀 BATCH TO EXCEL")
+    if os.path.exists(HISTORY_FILE):
+        df_ex = pd.read_csv(HISTORY_FILE)
+        df_ex['Display'] = df_ex['Timestamp'] + " - " + df_ex['Category'] + " (" + df_ex['Location'] + ")"
+        
+        selected_rows = st.multiselect("Select Photos to Transfer:", df_ex.index, format_func=lambda i: df_ex.iloc[i]['Display'])
+        
+        if st.button("📊 CREATE PROFESSIONAL EXCEL REPORT"):
+            if not selected_rows:
+                st.error("Please select at least one photo!")
+            else:
+                output = BytesIO()
+                workbook = xlsxwriter.Workbook(output)
+                sheet = workbook.add_worksheet("Site Report")
+                
+                # Formats
+                lbl_fmt = workbook.add_format({'bold': True, 'bg_color': '#E2EFDA', 'border': 1})
+                val_fmt = workbook.add_format({'border': 1})
+                
+                row = 0
+                for idx in selected_rows:
+                    data = df_ex.iloc[idx]
+                    # Row 1
+                    sheet.write(row, 0, "ACTIVITY:", lbl_fmt); sheet.write(row, 1, data['Category'], val_fmt)
+                    sheet.write(row, 2, "LOCATION:", lbl_fmt); sheet.write(row, 3, data['Location'], val_fmt)
+                    # Row 2
+                    sheet.write(row+1, 0, "TIMESTAMP:", lbl_fmt); sheet.write(row+1, 1, data['Timestamp'], val_fmt)
+                    sheet.write(row+1, 2, "GPS INFO:", lbl_fmt); sheet.write(row+1, 3, data['GPS'], val_fmt)
+                    
+                    # Row 3 (Image)
+                    img_name = data['Photo_Name']
+                    found = False
+                    for b_path in CLOUD_PATHS.values():
+                        p_file = os.path.join(b_path, img_name)
+                        if os.path.exists(p_file):
+                            sheet.insert_image(row+2, 0, p_file, {'x_scale': 0.15, 'y_scale': 0.15, 'x_offset': 5, 'y_offset': 5})
+                            found = True; break
+                    
+                    if not found: sheet.write(row+2, 0, "Photo missing in storage")
+                    row += 25 # Space for image
+                
+                workbook.close()
+                output.seek(0)
+                st.download_button("⬇️ DOWNLOAD YOUR SITE REPORT", output, f"SiteReport_{datetime.now().strftime('%d_%b')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        st.warning("No data found to transform.")
 
 st.divider()
-st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px;'>🛡️ <b>SMART CAPTURE</b> | Site Intelligence Console</p>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #3b82f6; font-size: 16px;'><b>Professional App Developer: Virrendra</b></p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px;'>🛡️ <b>SMART CAPTURE</b> | Professional Site Dashboard</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #3b82f6; font-size: 16px;'><b>App Developer: Virrendra</b></p>", unsafe_allow_html=True)
