@@ -9,6 +9,7 @@ import json
 import io
 import json
 import xlsxwriter
+import pytz
 from io import BytesIO
 try:
     from streamlit_js_eval import get_geolocation
@@ -32,7 +33,13 @@ def save_prefs(data):
 
 prefs = load_prefs()
 
-# --- PAGE CONFIGURATION (Premium App Look) ---
+# --- IST TIME SETTINGS ---
+IST = pytz.timezone('Asia/Kolkata')
+
+def get_ist_now():
+    return datetime.now(IST)
+
+# --- APP CONFIGURATION ---
 st.set_page_config(
     page_title="Smart Capture",
     page_icon="👷",
@@ -163,6 +170,19 @@ st.markdown("<div class='header-text'>BUILDING SMART CAPTURE</div>", unsafe_allo
 tab_capture, tab_data, tab_excel = st.tabs(["📸 SMART CAPTURE", "📋 HISTORY", "📑 EXCEL GENERATOR"])
 
 with tab_capture:
+    # Get IST Time and GPS
+    now_ist = get_ist_now()
+    loc_data = get_geolocation() if get_geolocation else None
+    
+    if loc_data and 'coords' in loc_data:
+        lat, lon = loc_data['coords']['latitude'], loc_data['coords']['longitude']
+        gps_str = f"{lat:.5f}, {lon:.5f}"
+        st.success(f"📍 GPS READY: {gps_str} | ⌚ IST: {now_ist.strftime('%d-%b %H:%M')}")
+    else:
+        gps_str = "No GPS Signal"
+        st.warning(f"⚠️ WAIT FOR GPS... | ⌚ IST: {now_ist.strftime('%d-%b %H:%M')}")
+
+    # Mode Summary
     st.write(f"📝 **Reporting**: {category} at {loc}")
     st.write(f"📁 **Saving to**: {dest}")
     st.caption(f"🎯 **IPAD TIP**: Mode is {c_mode}. Tap below to Snap Photo.")
@@ -171,8 +191,8 @@ with tab_capture:
     remarks = st.text_area("✍️ Site Remarks (Optional):", placeholder="Ex: Progress check on slab concrete.")
 
     if photo is not None and st.button("🚀 SUBMIT & SYNC TO CLOUD"):
-        now = datetime.now()
-        ts = now.strftime('%Y%c%d_%H%M%S')
+        now_push = get_ist_now()
+        ts = now_push.strftime('%Y%c%d_%H%M%S')
         img_filename = f"{ts}_{category[:10].replace(' ','_')}.jpg"
         os.makedirs(target_dir, exist_ok=True)
         img_path = os.path.join(target_dir, img_filename)
@@ -181,7 +201,7 @@ with tab_capture:
         try:
             draw = ImageDraw.Draw(image)
             w, h = image.size
-            dt_str = now.strftime('%d-%b-%Y (%A) %H:%M')
+            dt_str = now_push.strftime('%d-%b-%Y (%A) %H:%M')
             watermark_text = f"{dt_str} | GPS: {gps_str} | Developer: Virrendra"
             f_size = max(24, int(h * 0.03))
             try: font = ImageFont.truetype("arial.ttf", f_size)
@@ -190,14 +210,15 @@ with tab_capture:
             draw.text((w - pad_x, h - pad_y), watermark_text, fill="white", font=font, anchor="rs", stroke_width=max(1, f_size//20), stroke_fill="black")
         except: pass
         image.save(img_path, quality=90, optimize=True)
-        record = {'Timestamp': now.strftime('%d-%m-%Y %H:%M'), 'Category': category, 'Location': loc, 'GPS': gps_str, 'Destination': dest, 'Remarks': remarks, 'Photo_Name': img_filename}
+        
+        record = {'Timestamp': now_push.strftime('%d-%m-%Y %H:%M'), 'Category': category, 'Location': loc, 'GPS': gps_str, 'Destination': dest, 'Remarks': remarks, 'Photo_Name': img_filename}
         if os.path.exists(HISTORY_FILE):
             df = pd.read_csv(HISTORY_FILE)
             df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
         else:
             df = pd.DataFrame([record])
         df.to_csv(HISTORY_FILE, index=False)
-        st.success(f"✅ RECORDED SUCCESSFULLY! (Synced to Drive)")
+        st.success(f"✅ RECORDED SUCCESSFULLY! (IST Time Switched)")
         st.balloons()
 
 with tab_data:

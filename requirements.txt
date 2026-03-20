@@ -4,3 +4,4 @@ openpyxl
 Pillow
 streamlit-js-eval
 xlsxwriter
+pytz
